@@ -300,9 +300,6 @@ npm run lint && npm run type-check
 4. Push to branch: `git push origin feature/amazing-feature`
 5. Open pull request
 
-## 📄 License
-
-MIT License - feel free to use for commercial projects.
 
 ## 🆘 Troubleshooting
 
