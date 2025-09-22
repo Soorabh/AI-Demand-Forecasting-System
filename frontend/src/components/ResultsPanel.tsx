@@ -59,8 +59,8 @@ export function ResultsPanel({ data, config }: ResultsPanelProps) {
         'Baseline Forecast': basePoint?.yhat?.toFixed(2) || '',
         'AI Adjusted Forecast': point.yhat_final?.toFixed(2) || '',
         'Adjustment %': data.ai_adjustment?.adjustment_pct?.toFixed(2) || '0',
-        'Lower Bound': basePoint?.yhat_lower?.toFixed(2) || '',
-        'Upper Bound': basePoint?.yhat_upper?.toFixed(2) || '',
+        // 'Lower Bound': basePoint?.yhat_lower?.toFixed(2) || '',
+        // 'Upper Bound': basePoint?.yhat_upper?.toFixed(2) || '',
       };
     });
 

@@ -19,7 +19,7 @@ const INDUSTRIES = [
 ];
 
 const FREQUENCIES = [
-  { value: 'D' as const, label: 'Daily', description: 'Best for short-term planning and high-volume businesses' },
+  //{ value: 'D' as const, label: 'Daily', description: 'Best for short-term planning and high-volume businesses' },
   { value: 'W' as const, label: 'Weekly', description: 'Recommended for most business forecasting needs' },
   { value: 'M' as const, label: 'Monthly', description: 'Good for long-term strategic planning' },
 ];

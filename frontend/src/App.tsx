@@ -379,8 +379,8 @@ function AppContent() {
                       <tr style={{ backgroundColor: '#f3f4f6' }}>
                         <th style={{ padding: '0.5rem', textAlign: 'left', fontWeight: '500', color: '#374151' }}>Period</th>
                         <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: '500', color: '#374151' }}>Base Forecast</th>
-                        <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: '500', color: '#374151' }}>Lower Bound</th>
-                        <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: '500', color: '#374151' }}>Upper Bound</th>
+                        {/* <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: '500', color: '#374151' }}>Lower Bound</th> */}
+                        {/* <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: '500', color: '#374151' }}>Upper Bound</th> */}
                         {forecastResult.ai_adjustment && (
                           <th style={{ padding: '0.5rem', textAlign: 'right', fontWeight: '500', color: '#374151' }}>AI Adjusted</th>
                         )}
@@ -393,12 +393,12 @@ function AppContent() {
                           <td style={{ padding: '0.5rem', textAlign: 'right', color: '#111827' }}>
                             {point.yhat?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                           </td>
-                          <td style={{ padding: '0.5rem', textAlign: 'right', color: '#6b7280' }}>
+                          {/* <td style={{ padding: '0.5rem', textAlign: 'right', color: '#6b7280' }}>
                             {point.yhat_lower?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                           </td>
                           <td style={{ padding: '0.5rem', textAlign: 'right', color: '#6b7280' }}>
                             {point.yhat_upper?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                          </td>
+                          </td> */}
                           {forecastResult.ai_adjustment && (
                             <td style={{ padding: '0.5rem', textAlign: 'right', color: '#0284c7', fontWeight: '500' }}>
                               {forecastResult.forecast_final[idx]?.yhat_final?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -429,8 +429,8 @@ function AppContent() {
                       return {
                         'Period': point.ds,
                         'Baseline Forecast': Number((basePoint?.yhat || 0).toFixed(2)),
-                        'Lower Bound': Number((basePoint?.yhat_lower || 0).toFixed(2)),
-                        'Upper Bound': Number((basePoint?.yhat_upper || 0).toFixed(2)),
+                        //'Lower Bound': Number((basePoint?.yhat_lower || 0).toFixed(2)),
+                       // 'Upper Bound': Number((basePoint?.yhat_upper || 0).toFixed(2)),
                         ...(forecastResult.ai_adjustment && {
                           'AI Adjusted Forecast': Number((point.yhat_final || 0).toFixed(2))
                         })
