@@ -68,7 +68,7 @@ class ProphetService:
             df_clean.columns = ['ds', 'y']
             
             # Parse dates
-            df_clean['ds'] = pd.to_datetime(df_clean['ds'], errors='coerce')
+            df_clean['ds'] = pd.to_datetime(df_clean['ds'], errors='coerce', dayfirst=True)
             null_dates = df_clean['ds'].isnull().sum()
             
             if null_dates > 0:
