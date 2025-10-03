@@ -34,20 +34,17 @@ Today, we worked through several issues to connect the frontend and backend serv
 
 This diagram illustrates how data moves through the system when a user requests a forecast.
 
-```mermaid
 graph TD
-    A[User's Browser <br> (Vue Frontend)] -- 1. Upload CSV/XLSX --> B[metainflu Backend <br> (Node.js/Express)];
-    B -- 2. Auth Middleware Checks Token --> C{User Authenticated?};
-    C -- No --> D[401 Unauthorized Response];
-    C -- Yes --> E[Proxy to AI Backend];
-    E -- 3. Forward File + Params --> F[AI-Demand-Forecasting Backend <br> (Python/FastAPI)];
-    F -- 4. Generate Forecast --> F;
-    F -- 5. Return Forecast JSON --> E;
-    E -- 6. Return Forecast JSON --> B;
-    B -- 7. Send JSON to Frontend --> A;
-    A -- 8. Render Charts and Results --> A;
-```
-
+    A["User's Browser <br> (Vue Frontend)"] -- "1. Upload CSV/XLSX" --> B["metainflu Backend <br> (Node.js/Express)"];
+    B -- "2. Auth Middleware Checks Token" --> C{"User Authenticated?"};
+    C -- No --> D["401 Unauthorized Response"];
+    C -- Yes --> E["Proxy to AI Backend"];
+    E -- "3. Forward File + Params" --> F["AI-Demand-Forecasting Backend <br> (Python/FastAPI)"];
+    F -- "4. Generate Forecast" --> F;
+    F -- "5. Return Forecast JSON" --> E;
+    E -- "6. Return Forecast JSON" --> B;
+    B -- "7. Send JSON to Frontend" --> A;
+    A -- "8. Render Charts and Results" --> A;
 ## Detailed Data Flow
 
 Here is a step-by-step breakdown of the forecast generation process:
