@@ -33,8 +33,9 @@ Today, we worked through several issues to connect the frontend and backend serv
 ## Data Flow Diagram (DFD)
 
 This diagram illustrates how data moves through the system when a user requests a forecast.`
-graph TD
+
 ```mermaid
+graph TD
     A["User's Browser <br> (Vue Frontend)"] -- "1. Upload CSV/XLSX" --> B["metainflu Backend <br> (Node.js/Express)"];
     B -- "2. Auth Middleware Checks Token" --> C{"User Authenticated?"};
     C -- No --> D["401 Unauthorized Response"];
