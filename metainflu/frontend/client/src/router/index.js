@@ -1,4 +1,3 @@
-// File: frontend/client/src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router';
 import Landing from '../pages/Landing.vue';
 import About from '../pages/About.vue';
@@ -9,7 +8,10 @@ import ServicePage from '../pages/ServicePage.vue';
 import Login from '../pages/Login.vue';
 import Register from '../pages/Register.vue';
 import Contact from '../pages/Contact.vue';
-import profile from '../pages/profile.vue';
+// --- ✅ CORRECTED FILE PATH ---
+// The filename is case-sensitive in Docker. It should be 'Profile.vue'.
+import Profile from '../pages/Profile.vue'; 
+
 const routes = [
   {
     path: '/',
@@ -19,7 +21,7 @@ const routes = [
   {
     path: '/profile',
     name: 'Profile',
-    component: profile,
+    component: Profile,
   },
   {
     path: '/contact',

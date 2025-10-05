@@ -11,7 +11,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 // AI backend URL from environment variable or default
-const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'http://localhost:8000';
+const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'http://python-service:8000';
 
 router.post('/', protect, upload.single('file'), async (req, res) => {
   try {
