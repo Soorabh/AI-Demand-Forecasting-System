@@ -1,13 +1,15 @@
 # Use a slim and secure base image
 FROM node:18-alpine
 
+LABEL cache_buster="2025-10-05T18:05:00"
+
 WORKDIR /app
 
 # Copy package files first to leverage Docker cache
 COPY package*.json ./
 
-# Install only production dependencies
-RUN npm install --production
+# Install dependencies
+RUN npm install
 
 # Copy the rest of the application source code
 COPY . .

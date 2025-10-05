@@ -12,6 +12,10 @@ services:
       - "5000:5000"
     environment:
       - NODE_ENV=production
+      - MONGO_URI=${MONGO_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       # Add other environment variables like database connection strings
       # - MONGO_URI=mongodb://mongo:27017/metainflu
     networks:
