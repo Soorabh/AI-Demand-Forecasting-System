@@ -1,9 +1,9 @@
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
-
 from routers import forecast, ai_adjust, geo_data
 from models.schemas import ErrorResponse
 
@@ -15,26 +15,21 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Simple CORS middleware
-class SimpleCORSMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # For preflight requests
-        if request.method == "OPTIONS":
-            response = Response()
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-            response.headers["Access-Control-Max-Age"] = "86400"
-            return response
-        
-        # For regular requests
-        response = await call_next(request)
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return response
+# Changed: Define the specific frontend origins that are allowed to connect
+origins = [
+    "http://localhost:5173",  # Default Vite dev server port
+    "http://localhost:8080",  # Common alternative
+    # Add any other frontend URLs you use
+]
 
-app.add_middleware(SimpleCORSMiddleware)
+# Changed: Replace the custom middleware with the official one
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include routers
 app.include_router(forecast.router, prefix="/api", tags=["forecast"])
