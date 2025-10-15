@@ -1,4 +1,3 @@
-# prophet_service_safe.py
 import io
 import logging
 import math
