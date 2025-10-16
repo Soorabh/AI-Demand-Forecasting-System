@@ -254,7 +254,7 @@ class ProphetService:
             work['ds'] = pd.to_datetime(work['ds'], errors='coerce', infer_datetime_format=True)
             null_dates = int(work['ds'].isnull().sum())
             if null_dates > 0:
-                logger.warning(f"Dropping {null_dates} rows with invalid dates (will be reported in meta)")
+                logger.warning(f"Dropping {null_dates} rows with invalid dates")
 
             work = work.dropna(subset=['ds'])
             # Normalize timezone-naive datetimes (remove tzinfo to keep consistency)
@@ -266,6 +266,9 @@ class ProphetService:
             if null_targets > 0:
                 logger.warning(f"Dropping {null_targets} rows with non-numeric target")
             work = work[work['y'].notnull()]
+
+            # --- NEW: Aggregate duplicate dates by summing target values ---
+            work = work.groupby('ds', as_index=False).agg({'y': 'sum'})
 
             if len(work) == 0:
                 raise UserInputError("No valid rows after parsing dates and numeric targets")
