@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024        # 10 MB
 CSV_CHUNK_SIZE = 100_000                   # rows per chunk when streaming
 MIN_PERIODS_REQUIRED = 12
-SAFE_ADJUSTMENT_PCT_MIN = -80.0            # do not allow less than -80%
-SAFE_ADJUSTMENT_PCT_MAX = 500.0            # cap at +500%
+SAFE_ADJUSTMENT_PCT_MIN = -20.0            # do not allow less than -20%
+SAFE_ADJUSTMENT_PCT_MAX = 20.0            # cap at +20%
 HORIZON_LIMITS = {'D': 365, 'W': 156, 'M': 60}  # safe caps
 ALLOWED_FREQS = {'D', 'W', 'M'}
 
