@@ -3,12 +3,15 @@ import logging
 import math
 import tempfile
 import asyncio
+import sys
+import os
 from datetime import datetime, timedelta
 from typing import Tuple, Optional, List, Any, Dict
 
 import numpy as np
 import pandas as pd
 from prophet import Prophet
+from services.prophet_utils import suppress_stdout_stderr, prepare_prophet_data, get_prophet_config
 
 # Optional encoding detector
 try:
@@ -251,7 +254,14 @@ class ProphetService:
             work.columns = ['ds', 'y']
 
             # Parse ds column carefully
-            work['ds'] = pd.to_datetime(work['ds'], errors='coerce', infer_datetime_format=True)
+            work['ds'] = pd.to_datetime(work['ds'], errors='coerce')  # infer_datetime_format deprecated
+            # drop rows where date couldn't be parsed
+            work = work[work['ds'].notna()].reset_index(drop=True)
+            # ensure timezone-naive pandas Timestamps (Prophet expects datetime-like)
+            if pd.api.types.is_datetime64_any_dtype(work['ds']):
+                # normalize to midnight (no time component) to avoid date vs datetime issues
+                work['ds'] = work['ds'].dt.normalize()
+
             null_dates = int(work['ds'].isnull().sum())
             if null_dates > 0:
                 logger.warning(f"Dropping {null_dates} rows with invalid dates")
@@ -413,33 +423,89 @@ class ProphetService:
     # -------------------------
     def _train_prophet_model_sync(self, df: pd.DataFrame, holidays_df: Optional[pd.DataFrame], freq: str) -> Prophet:
         """
-        Blocking model fit. Should be called via asyncio.to_thread in the async path.
+        Train Prophet; if initialization or fit fails (Stan backend missing or other),
+        return a Prophet-compatible fallback model via self._get_fallback_model(...)
         """
         try:
-            daily_seasonality = freq == 'D'
-            weekly_seasonality = freq in ('D', 'W')
-            yearly_seasonality = True
+            # Prepare and validate data
+            prophet_df = prepare_prophet_data(df)
+            if len(prophet_df) < MIN_PERIODS_REQUIRED:
+                raise UserInputError(f"Need at least {MIN_PERIODS_REQUIRED} valid data points after preparation")
 
-            cv = (df['y'].std() / df['y'].mean()) if df['y'].mean() != 0 else 0.0
-            seasonality_mode = 'multiplicative' if cv > 0.5 else 'additive'
+            # Get config but DO NOT force stan_backend here — let Prophet choose
+            config = get_prophet_config(prophet_df, freq)
 
-            model = Prophet(
-                daily_seasonality=daily_seasonality,
-                weekly_seasonality=weekly_seasonality,
-                yearly_seasonality=yearly_seasonality,
-                seasonality_mode=seasonality_mode,
-                holidays=holidays_df,
-                uncertainty_samples=50  # tuned to balance quality and perf
-            )
+            # Try to initialize Prophet normally
+            try:
+                model = Prophet(**config)
+            except Exception as e:
+                logger.warning("Prophet initialization failed: %s", str(e)[:300])
+                # Quick probe: is cmdstanpy installed?
+                try:
+                    import cmdstanpy  # type: ignore
+                    logger.info("cmdstanpy package present; ensure CmdStan binaries installed in the image")
+                except Exception:
+                    logger.info("cmdstanpy not present in environment")
+                return self._get_fallback_model(prophet_df, freq)
 
-            # fit may be slow - caller must run in background thread
-            model.fit(df)
-            logger.info("Prophet model fit complete (seasonality=%s)", seasonality_mode)
+            # Add holidays if provided (Prophet API)
+            if holidays_df is not None and not holidays_df.empty:
+                # Ensure holiday dates are proper pandas datetimes (not python.date)
+                holidays_df = holidays_df.copy()
+                # if 'ds' column might be plain date objects or strings, coerce robustly
+                holidays_df['ds'] = pd.to_datetime(holidays_df['ds'], errors='coerce')
+                # drop unparsable rows
+                holidays_df = holidays_df[holidays_df['ds'].notna()].reset_index(drop=True)
+                # normalize to midnight to avoid time vs date mismatches
+                holidays_df['ds'] = holidays_df['ds'].dt.normalize()
+
+                # Prophet accepts a holidays DataFrame with columns ['ds','holiday']; ensure expected names
+                # if holidays_df has different column names, map them here (example: 'date' -> 'ds')
+                if 'holiday' not in holidays_df.columns:
+                    # best-effort: if there's a 'name' or 'label' column, rename it
+                    for alt in ('name', 'label'):
+                        if alt in holidays_df.columns:
+                            holidays_df = holidays_df.rename(columns={alt: 'holiday'})
+                            break
+
+            # Fit model (may be slow) — suppress noisy stdout/stderr
+            try:
+                with suppress_stdout_stderr():
+                    model.fit(prophet_df)
+            except Exception as e:
+                _safe_log_exception("Prophet fit failed", e)
+                return self._get_fallback_model(prophet_df, freq)
+
+            logger.info("Prophet model trained successfully with %d points", len(prophet_df))
             return model
 
+        except UserInputError:
+            raise
         except Exception as e:
             _safe_log_exception("Prophet training failed", e)
-            raise SystemError("Model training failed") from e
+            return self._get_fallback_model(df, freq)
+
+    def _get_fallback_model(self, df: pd.DataFrame, freq: str) -> Any:
+        """Simple fallback model when Prophet fails."""
+        class SimpleModel:
+            def __init__(self, history_df: pd.DataFrame):
+                self.mean = float(history_df['y'].mean())
+                self.std = float(history_df['y'].std())
+
+            def make_future_dataframe(self, periods: int, freq: str) -> pd.DataFrame:
+                last_date = df['ds'].max()
+                dates = pd.date_range(start=last_date, periods=periods + 1, freq=freq)[1:]
+                return pd.DataFrame({'ds': dates})
+
+            def predict(self, future_df: pd.DataFrame) -> pd.DataFrame:
+                forecast = future_df.copy()
+                forecast['yhat'] = self.mean
+                forecast['yhat_lower'] = max(0, self.mean - 1.96 * self.std)
+                forecast['yhat_upper'] = self.mean + 1.96 * self.std
+                return forecast
+
+        logger.warning("Using fallback forecasting model due to Prophet initialization failure")
+        return SimpleModel(df)
 
     # -------------------------
     # Main forecasting function
@@ -655,4 +721,72 @@ class ProphetService:
         """
         freq_map = {'D': 'D', 'W': 'W-MON', 'M': 'MS'}
         return freq_map.get(freq, 'D')
+
+    def _get_prophet_config(self, df: pd.DataFrame, freq: str) -> Dict[str, Any]:
+        """Get optimal Prophet configuration based on data characteristics."""
+        
+        # Calculate data characteristics
+        n_points = len(df)
+        date_range = (df['ds'].max() - df['ds'].min()).days
+        
+        config = {
+            'daily_seasonality': freq == 'D',
+            'weekly_seasonality': freq in ('D', 'W'),
+            'yearly_seasonality': date_range >= 365,
+            'growth': 'linear',
+            'seasonality_mode': 'multiplicative' if df['y'].std() / df['y'].mean() > 0.5 else 'additive',
+            'seasonality_prior_scale': 10.0,  # Flexibility of the seasonality
+            'changepoint_prior_scale': 0.05,  # Flexibility of the trend
+            'holidays_prior_scale': 10.0,     # Flexibility of the holiday effects
+        }
+        
+        # Add changepoints if enough data
+        if n_points > 50:
+            config['n_changepoints'] = min(25, n_points // 10)
+        
+        return config
+
+    # -------------------------
+    # Add before training Prophet model
+    # -------------------------
+    def _prepare_prophet_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Prepare data specifically for Prophet training."""
+        prophet_df = df.copy()
+        
+        # Remove duplicates
+        prophet_df = prophet_df.drop_duplicates(subset=['ds'])
+        
+        # Sort by date
+        prophet_df = prophet_df.sort_values('ds')
+        
+        # Handle outliers (optional)
+        Q1 = prophet_df['y'].quantile(0.25)
+        Q3 = prophet_df['y'].quantile(0.75)
+        IQR = Q3 - Q1
+        prophet_df = prophet_df[
+            (prophet_df['y'] >= Q1 - 1.5 * IQR) & 
+            (prophet_df['y'] <= Q3 + 1.5 * IQR)
+        ]
+        
+        # Ensure no negative values
+        prophet_df['y'] = prophet_df['y'].clip(lower=0)
+        
+        # Reset index
+        prophet_df = prophet_df.reset_index(drop=True)
+        
+        return prophet_df
+
+class suppress_stdout_stderr:
+    """Context manager to suppress Prophet's stdout/stderr prints."""
+    def __enter__(self):
+        self.stdout = sys.stdout
+        self.stderr = sys.stderr
+        sys.stdout = open(os.devnull, 'w')
+        sys.stderr = open(os.devnull, 'w')
+
+    def __exit__(self, *args):
+        sys.stdout.close()
+        sys.stderr.close()
+        sys.stdout = self.stdout
+        sys.stderr = self.stderr
 
