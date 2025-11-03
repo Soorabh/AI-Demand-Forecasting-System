@@ -253,22 +253,31 @@ class ProphetService:
             work = df[[request.date_col, request.target_col]].copy()
             work.columns = ['ds', 'y']
 
-            # Parse ds column carefully
-            work['ds'] = pd.to_datetime(work['ds'], errors='coerce')  # infer_datetime_format deprecated
-            # drop rows where date couldn't be parsed
-            work = work[work['ds'].notna()].reset_index(drop=True)
-            # ensure timezone-naive pandas Timestamps (Prophet expects datetime-like)
-            if pd.api.types.is_datetime64_any_dtype(work['ds']):
-                # normalize to midnight (no time component) to avoid date vs datetime issues
-                work['ds'] = work['ds'].dt.normalize()
+            # Parse ds column carefully:
+            # 1) Try pandas generic parser (preserves all existing accepted formats)
+            parsed = pd.to_datetime(work['ds'], errors='coerce', dayfirst=False)
 
+            # 2) For any failures, explicitly try DD-MM-YYYY and DD-MM-YY (user-requested)
+            mask = parsed.isna()
+            if mask.any():
+                fallback1 = pd.to_datetime(work.loc[mask, 'ds'], format='%d-%m-%Y', errors='coerce')
+                fallback2 = pd.to_datetime(work.loc[mask, 'ds'], format='%d-%m-%y', errors='coerce')
+                parsed.loc[mask] = fallback1.fillna(fallback2)
+
+            work['ds'] = parsed
             null_dates = int(work['ds'].isnull().sum())
             if null_dates > 0:
                 logger.warning(f"Dropping {null_dates} rows with invalid dates")
+            work = work[work['ds'].notna()].reset_index(drop=True)
 
-            work = work.dropna(subset=['ds'])
-            # Normalize timezone-naive datetimes (remove tzinfo to keep consistency)
-            work['ds'] = work['ds'].dt.tz_localize(None)
+            # normalize datetimes to midnight and remove tzinfo so Prophet receives timezone-naive Timestamps
+            if pd.api.types.is_datetime64_any_dtype(work['ds']):
+                work['ds'] = work['ds'].dt.normalize()
+            try:
+                work['ds'] = work['ds'].dt.tz_localize(None)
+            except Exception:
+                # ignore if already tz-naive or operation unsupported
+                pass
 
             # Convert target to numeric safely using robust sanitizer
             work['y'] = work['y'].apply(_sanitize_numeric_str)
