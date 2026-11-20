@@ -6,6 +6,7 @@ const cors = require('cors');
 // Import only the required routes
 const authRoutes = require('./routes/authRoutes');
 const forecastRoutes = require('./routes/forecastRoutes');
+const geoRoutes = require('./routes/geoRoutes');
 
 const { errorHandler } = require('./middleware/errorMiddleware');
 const { protect } = require('./middleware/authMiddleware');
@@ -53,6 +54,7 @@ mongoose.connect(mongoURI, {
 // The server will now correctly handle requests to '/api/auth' and '/api/forecast'.
 app.use('/api/auth', authRoutes);
 app.use('/api/forecast', forecastRoutes);
+app.use('/api/geo', geoRoutes);
 
 // Test protected route
 app.get('/protected', protect, (req, res) => {

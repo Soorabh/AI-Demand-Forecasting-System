@@ -15,6 +15,34 @@ from models.schemas import (
 
 logger = logging.getLogger(__name__)
 
+# Calendar days covered by one forecast period, per frequency.
+# Monthly uses 31 so the holiday window always covers the last forecast month.
+DAYS_PER_PERIOD = {'D': 1, 'W': 7, 'M': 31}
+PERIODS_PER_YEAR = {'D': 365, 'W': 52, 'M': 12}
+
+
+def horizon_to_days(freq: str, horizon: int) -> int:
+    """Convert a forecast horizon in periods to calendar days."""
+    return DAYS_PER_PERIOD.get(freq, 1) * horizon
+
+
+def display_names(country: str, state: Optional[str]) -> Tuple[str, Optional[str]]:
+    """Turn ISO codes from the frontend ('IN', 'IN-MH') into readable names for the AI prompt."""
+    country_name, state_name = country, state
+    try:
+        import pycountry
+        match = pycountry.countries.get(alpha_2=country.upper()) if len(country) == 2 else None
+        if match:
+            country_name = match.name
+        if state:
+            sub = pycountry.subdivisions.get(code=state.upper())
+            if sub:
+                state_name = sub.name
+    except Exception as e:  # names are cosmetic; never fail the forecast over them
+        logger.debug(f"Could not resolve location names: {e}")
+    return country_name, state_name
+
+
 class ProphetService:
     """Service for Prophet-based forecasting with AI adjustment."""
     
@@ -156,14 +184,15 @@ class ProphetService:
             else:
                 last4_growth_pct = 0
             
-            # Calculate YoY growth (approximate)
-            periods_per_year = {'D': 365, 'W': 52, 'M': 12}
-            periods_back = periods_per_year.get(freq, 52)
-            
-            if len(df) > periods_back:
-                current_period = df.iloc[-1]['y']
-                year_ago_period = df.iloc[-periods_back-1]['y']
-                yoy_last_period_pct = ((current_period - year_ago_period) / year_ago_period * 100) if year_ago_period > 0 else 0
+            # YoY growth: compare the average of the last 4 periods with the
+            # same 4 periods one year earlier (one-period comparisons are too noisy).
+            periods_back = PERIODS_PER_YEAR.get(freq, 52)
+            window = 4
+
+            if len(df) >= periods_back + window:
+                current_avg = df['y'].iloc[-window:].mean()
+                year_ago_avg = df['y'].iloc[-periods_back - window:-periods_back].mean()
+                yoy_last_period_pct = ((current_avg - year_ago_avg) / year_ago_avg * 100) if year_ago_avg > 0 else 0
             else:
                 yoy_last_period_pct = 0
             
@@ -200,7 +229,7 @@ class ProphetService:
                 holidays_df = self.holidays_service.get_holidays_dataframe(
                     request.country, request.state,
                     df_clean['ds'].min(), 
-                    df_clean['ds'].max() + timedelta(days=request.horizon*30)
+                    df_clean['ds'].max() + timedelta(days=horizon_to_days(request.freq, request.horizon))
                 )
                 meta.holidays_used = holidays_df['holiday'].unique().tolist() if not holidays_df.empty else []
             
@@ -219,21 +248,24 @@ class ProphetService:
             
             # Apply AI adjustment if requested
             ai_adjustment_info = None
-            forecast_final_data = forecast_base_data.copy()
+            # Copy each row so adding 'yhat_final' doesn't also change the base forecast rows
+            forecast_final_data = [dict(point) for point in forecast_base_data]
             
             if request.apply_ai_adjustment:
                 try:
                     # Get recent summary and upcoming holidays
                     recent_summary = self._get_recent_summary(df_clean, request.freq)
                     upcoming_holidays = self.holidays_service.get_upcoming_holidays(
-                        request.country, request.state, request.horizon
+                        request.country, request.state,
+                        days_ahead=horizon_to_days(request.freq, request.horizon)
                     )
-                    
-                    # Call AI adjustment service
+
+                    # Call AI adjustment service (with readable place names, not ISO codes)
+                    country_name, state_name = display_names(request.country, request.state)
                     ai_request = AIAdjustmentRequest(
                         industry=request.industry,
-                        country=request.country,
-                        state=request.state,
+                        country=country_name,
+                        state=state_name,
                         city=request.city,
                         freq=request.freq,
                         horizon=request.horizon,

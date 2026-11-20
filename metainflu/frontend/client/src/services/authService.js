@@ -2,8 +2,10 @@
 
 // This file handles all API calls related to user authentication
 
-// The base URL of your backend API
-const API_URL = 'http://localhost:5000/api/auth/';
+import { API_BASE_URL } from '../lib/api';
+
+// The base URL of the auth API (served by the Node backend)
+const API_URL = `${API_BASE_URL}/auth/`;
 
 /**
  * Registers a new user by sending a POST request to the backend.

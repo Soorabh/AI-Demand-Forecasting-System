@@ -1,5 +1,7 @@
 # AI Demand Forecasting System - Technical Documentation
 
+> **Note:** The frontend sections of this document describe the original React + TypeScript frontend, which has been replaced by the Vue app in `metainflu/frontend/client`. The backend sections (Prophet, holidays, Perplexity) are still accurate. See `README.md` for the current architecture and setup.
+
 ## 📋 Table of Contents
 
 1. [System Architecture](#system-architecture)

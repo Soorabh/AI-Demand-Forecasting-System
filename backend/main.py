@@ -1,6 +1,5 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
@@ -15,14 +14,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Changed: Define the specific frontend origins that are allowed to connect
+# The browser normally reaches this service through the Node backend, so CORS
+# only matters when calling it directly (e.g. from Swagger UI or a dev tool).
+# Override with a comma-separated ALLOWED_ORIGINS env var.
 origins = [
-    "http://localhost:5173",  # Default Vite dev server port
-    "http://localhost:8080",  # Common alternative
-    # Add any other frontend URLs you use
+    o.strip()
+    for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:8080").split(",")
+    if o.strip()
 ]
 
-# Changed: Replace the custom middleware with the official one
+# CORSMiddleware also answers OPTIONS preflight requests, so no custom handler is needed.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -49,21 +50,6 @@ async def health_check():
 @app.get("/cors-test")
 async def cors_test():
     return {"message": "CORS test successful", "status": "ok"}
-
-@app.options("/{full_path:path}")
-async def options_handler(request: Request, full_path: str):
-    """Handle all OPTIONS requests"""
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Max-Age": "86400",
-        }
-    )
-
-
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
