@@ -1,6 +1,9 @@
 // File: frontend/client/src/services/influencerService.js
 
-const API_URL = 'https://3czzqk3l-5000.use2.devtunnels.ms/api/influencers/';
+import { API_BASE_URL } from '../lib/api';
+
+// Note: nothing imports this service yet, and the Node backend has no /influencers routes.
+const API_URL = `${API_BASE_URL}/influencers/`;
 
 /**
  * Creates a new influencer profile.

@@ -1,18 +1,20 @@
 // File: frontend/client/src/services/forecastService.js
 import axios from 'axios';
-
-// Changed: Removed the trailing slash from the API_URL
-const API_URL = 'http://localhost:8000/api';
+import { API_BASE_URL } from '../lib/api';
 
 const getAuthToken = () => {
   const user = JSON.parse(localStorage.getItem('user'));
   return user ? user.token : null;
 };
 
-// This will now correctly form the URL as http://localhost:8000/api/countries
+const authHeaders = () => {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 export async function getCountries() {
   try {
-    const response = await axios.get(`${API_URL}/countries`);
+    const response = await axios.get(`${API_BASE_URL}/geo/countries`);
     return response.data.countries;
   } catch (error) {
     console.error("Error fetching countries:", error);
@@ -20,11 +22,10 @@ export async function getCountries() {
   }
 }
 
-// This will now correctly form the URL as http://localhost:8000/api/subdivisions/{country}
 export async function getSubdivisions(country) {
   if (!country) return [];
   try {
-    const response = await axios.get(`${API_URL}/subdivisions/${country}`);
+    const response = await axios.get(`${API_BASE_URL}/geo/subdivisions/${encodeURIComponent(country)}`);
     return response.data.subdivisions;
   } catch (error) {
     console.error(`Error fetching subdivisions for ${country}:`, error);
@@ -56,19 +57,22 @@ export async function generateForecast(params) {
     formData.append('apply_ai_adjustment', params.apply_ai_adjustment);
 
     try {
-        // This will now correctly form the URL as http://localhost:8000/api/forecast
-        const response = await axios.post(`${API_URL}/forecast`, formData, {
+        // Goes through the Node backend, which checks the JWT and then
+        // forwards the request to the Python forecasting service.
+        const response = await axios.post(`${API_BASE_URL}/forecast`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
-                'Authorization': `Bearer ${token}`,
+                ...authHeaders(),
             },
         });
         return response.data;
     } catch (error) {
-        if (error.response && error.response.data) {
-            throw new Error(error.response.data.message || 'An error occurred during forecast generation.');
-        } else {
-            throw new Error('An error occurred during forecast generation.');
+        const data = error.response && error.response.data;
+        if (data) {
+            // Node errors use `message`; FastAPI errors use `detail`.
+            const detail = typeof data.detail === 'string' ? data.detail : null;
+            throw new Error(data.message || detail || 'An error occurred during forecast generation.');
         }
+        throw new Error('An error occurred during forecast generation.');
     }
 }

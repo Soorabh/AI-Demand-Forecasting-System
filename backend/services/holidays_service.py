@@ -106,7 +106,30 @@ class HolidaysService:
             logger.error(f"Error getting holidays: {e}")
             return pd.DataFrame(columns=['ds', 'holiday'])
     
+    @staticmethod
+    def _normalize_state(country_code: str, state: Optional[str]) -> Optional[str]:
+        """Accept ISO 3166-2 codes from the frontend (e.g. 'US-CA', 'IN-MH') as well as plain names/codes."""
+        if not state:
+            return None
+        state = state.strip()
+        prefix = f"{country_code}-"
+        if state.upper().startswith(prefix):
+            return state[len(prefix):]
+        return state
+
     def _get_holidays_dict(self, country_code: str, state: Optional[str], years: List[int]) -> dict:
+        """Get holidays for the country, using state-level holidays when the state is recognised.
+
+        Falls back to national holidays if the state is unknown to the holidays library.
+        """
+        state = self._normalize_state(country_code, state)
+        result = self._build_holidays(country_code, state, years)
+        if not result and state:
+            logger.warning(f"State '{state}' not recognised for {country_code}; using national holidays")
+            result = self._build_holidays(country_code, None, years)
+        return result
+
+    def _build_holidays(self, country_code: str, state: Optional[str], years: List[int]) -> dict:
         """Get holidays dictionary from holidays library."""
         try:
             if country_code == 'US' and state:
@@ -126,7 +149,9 @@ class HolidaysService:
                     'bihar': 'BR',
                     'odisha': 'OR'
                 }
-                state_code = state_mapping.get(state.lower())
+                state_code = state_mapping.get(state.lower()) or (
+                    state.upper() if state.upper() in state_mapping.values() else None
+                )
                 if state_code:
                     return holidays.India(state=state_code, years=years)
                 else:
@@ -145,7 +170,9 @@ class HolidaysService:
                     'newfoundland and labrador': 'NL',
                     'prince edward island': 'PE'
                 }
-                province_code = province_mapping.get(state.lower())
+                province_code = province_mapping.get(state.lower()) or (
+                    state.upper() if state.upper() in province_mapping.values() else None
+                )
                 if province_code:
                     return holidays.Canada(state=province_code, years=years)
                 else:
@@ -176,11 +203,11 @@ class HolidaysService:
             return {}
     
     def get_upcoming_holidays(self, country: str, state: Optional[str] = None, 
-                            weeks_ahead: int = 8) -> List[str]:
+                            days_ahead: int = 56) -> List[str]:
         """Get list of upcoming holiday names for AI context."""
         try:
             start_date = datetime.now()
-            end_date = start_date + timedelta(weeks=weeks_ahead)
+            end_date = start_date + timedelta(days=days_ahead)
             
             holidays_df = self.get_holidays_dataframe(country, state, start_date, end_date)
             

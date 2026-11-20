@@ -16,6 +16,10 @@ services:
     envVars:
       - key: MONGO_URI
         sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
       - key: AI_BACKEND_URL
         fromService:
           type: pserv
@@ -33,7 +37,7 @@ services:
     routes:
       - type: rewrite
         source: /api/:path*
-        destination: "https://metainflu-backend.onrender.com/:path*"
+        destination: "https://metainflu-backend.onrender.com/api/:path*"
       - type: rewrite
         source: /*
         destination: /index.html
